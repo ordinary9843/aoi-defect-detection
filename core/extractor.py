@@ -6,8 +6,8 @@ from PIL import Image
 
 
 class FeatureExtractor:
-    def __init__(self, device: str = "cpu"):
-        self.device = device
+    def __init__(self, device: str = None):
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self._features: dict = {}
 
         self.model = models.wide_resnet50_2(weights=models.Wide_ResNet50_2_Weights.IMAGENET1K_V1)

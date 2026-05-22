@@ -85,11 +85,11 @@ Download `transistor.tar.xz` from [MVTec AD](https://www.mvtec.com/company/resea
 
 | Environment | Latency |
 |---|---|
-| CPU — Docker (this demo) | ~2000 ms |
-| GPU — RTX 3060 (estimated) | ~200–400 ms |
+| CPU — Docker | ~2000 ms |
+| GPU — RTX 3060 (Docker) | ~200–400 ms |
 | Production GPU server | < 50 ms |
 
-*Demo: i5-14400F, 16 GB RAM, CPU inference (no GPU passthrough)*
+*Tested on i5-14400F, 16 GB RAM, RTX 3060 — GPU auto-detected via CUDA*
 
 ---
 
@@ -100,7 +100,7 @@ Download `transistor.tar.xz` from [MVTec AD](https://www.mvtec.com/company/resea
 | `damaged_case` not detected | Subtle defect; patch features insufficient | Higher resolution / pixel-level segmentation |
 | Memory bank grows with data | Full patch storage, O(N × 784 × 1536) | Coreset subsampling (PatchCore §3.3) |
 | Single global threshold | One 99th-percentile value | Per-category calibration |
-| CPU inference too slow for production | No CUDA environment configured | Switch to `nvidia/cuda` base image + NVIDIA Container Toolkit |
+| CPU inference too slow for production | GPU requires NVIDIA Container Toolkit on host | Install [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) |
 
 ---
 

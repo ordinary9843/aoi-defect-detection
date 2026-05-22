@@ -1,6 +1,6 @@
 # AOI Defect Detection
 
-Unsupervised IC component defect detection — **no defect labels required**.
+Unsupervised electronic component defect detection — **no defect labels required**.
 
 Built on [PatchCore (CVPR 2022)](https://openaccess.thecvf.com/content/CVPR2022/html/Roth_Towards_Total_Recall_in_Industrial_Anomaly_Detection_CVPR_2022_paper.html) with WideResNet50-2 backbone, evaluated on the MVTec AD benchmark.
 
@@ -100,7 +100,7 @@ Download `transistor.tar.xz` from [MVTec AD](https://www.mvtec.com/company/resea
 | `damaged_case` not detected | Subtle defect; patch features insufficient | Higher resolution / pixel-level segmentation |
 | Memory bank grows with data | Full patch storage, O(N × 784 × 1536) | Coreset subsampling (PatchCore §3.3) |
 | Single global threshold | One 99th-percentile value | Per-category calibration |
-| CPU inference too slow for production | No GPU passthrough in Docker | CUDA container + GPU server deployment |
+| CPU inference too slow for production | No CUDA environment configured | Switch to `nvidia/cuda` base image + NVIDIA Container Toolkit |
 
 ---
 

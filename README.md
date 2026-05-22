@@ -42,7 +42,7 @@ Dataset: MVTec AD — transistor (213 training images, 100 test images)
 
 - **No GPU training** — uses pretrained ImageNet features
 - **Calibration separated from build** — threshold set on held-out normal images
-- **Heatmap output** — pixel-level anomaly localization
+- **Heatmap output** — patch-level anomaly localization upsampled to original resolution
 
 ---
 
@@ -65,7 +65,7 @@ Dataset: MVTec AD — transistor (213 training images, 100 test images)
 ```bash
 git clone https://github.com/ordinary9843/aoi-defect-detection.git
 cd aoi-defect-detection
-docker-compose up
+docker-compose up --build
 ```
 
 Open `http://localhost:8000`

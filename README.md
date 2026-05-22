@@ -86,8 +86,8 @@ Download `transistor.tar.xz` from [MVTec AD](https://www.mvtec.com/company/resea
 | Environment | Latency |
 |---|---|
 | CPU — Docker | ~2000 ms |
-| GPU — RTX 3060 (Docker) | ~200–400 ms |
-| Production GPU server | < 50 ms |
+| GPU — RTX 3060 (Docker) | ~400–700 ms |
+| Production GPU server | < 100 ms |
 
 *Tested on i5-14400F, 16 GB RAM, RTX 3060 — GPU auto-detected via CUDA*
 

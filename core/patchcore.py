@@ -4,6 +4,7 @@ from typing import Callable
 
 import cv2
 import numpy as np
+import torch
 from PIL import Image
 from scipy.ndimage import gaussian_filter
 from sklearn.neighbors import NearestNeighbors
@@ -18,6 +19,7 @@ class PatchCore:
         self.memory_bank: np.ndarray | None = None
         self.threshold: float | None = None
         self._nbrs: NearestNeighbors | None = None
+        self._memory_tensor: torch.Tensor | None = None
 
     # ------------------------------------------------------------------
     # Build
@@ -39,11 +41,7 @@ class PatchCore:
                 callback(i + 1, total)
 
         self.memory_bank = np.concatenate(all_patches, axis=0)
-        self._nbrs = NearestNeighbors(n_neighbors=self.n_neighbors, metric="euclidean", n_jobs=-1)
-        self._nbrs.fit(self.memory_bank)
-
-        # Threshold is not set here — requires calibrate() with held-out normal images.
-        # Default to None until calibrated.
+        self._build_index()
         self.threshold = None
         return total
 
@@ -98,12 +96,28 @@ class PatchCore:
         self.memory_bank = data["memory_bank"]
         self.threshold = data["threshold"]
         self.n_neighbors = data["n_neighbors"]
-        self._nbrs = NearestNeighbors(n_neighbors=self.n_neighbors, metric="euclidean", n_jobs=-1)
-        self._nbrs.fit(self.memory_bank)
+        self._build_index()
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def _build_index(self) -> None:
+        if self.extractor.device == "cuda":
+            self._memory_tensor = torch.from_numpy(self.memory_bank).float().cuda()
+            self._nbrs = None
+        else:
+            self._nbrs = NearestNeighbors(n_neighbors=self.n_neighbors, metric="euclidean", n_jobs=-1)
+            self._nbrs.fit(self.memory_bank)
+            self._memory_tensor = None
+
+    def _knn_distances(self, patches: np.ndarray) -> np.ndarray:
+        if self._memory_tensor is not None:
+            q = torch.from_numpy(patches).float().cuda()
+            dists = torch.cdist(q.unsqueeze(0), self._memory_tensor.unsqueeze(0)).squeeze(0)
+            return dists.topk(self.n_neighbors, largest=False, dim=1).values.mean(dim=1).cpu().numpy()
+        else:
+            return self._nbrs.kneighbors(patches)[0].mean(axis=1)
 
     def _image_score(self, image: Image.Image) -> float:
         score, _ = self._score_map(image)
@@ -111,8 +125,7 @@ class PatchCore:
 
     def _score_map(self, image: Image.Image) -> tuple[float, np.ndarray]:
         patches, (h, w) = self.extractor.extract(image)
-        distances, _ = self._nbrs.kneighbors(patches)
-        patch_scores = distances.mean(axis=1).reshape(h, w)
+        patch_scores = self._knn_distances(patches).reshape(h, w)
 
         orig_w, orig_h = image.size
         score_map = cv2.resize(patch_scores, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)

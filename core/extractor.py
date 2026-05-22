@@ -11,7 +11,7 @@ class FeatureExtractor:
         self._features: dict = {}
 
         self.model = models.wide_resnet50_2(weights=models.Wide_ResNet50_2_Weights.IMAGENET1K_V1)
-        self.model.eval().to(device)
+        self.model.eval().to(self.device)
 
         self.model.layer2.register_forward_hook(self._hook("layer2"))
         self.model.layer3.register_forward_hook(self._hook("layer3"))

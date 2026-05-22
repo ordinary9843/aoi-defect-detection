@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AOI Defect Detection</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d1117;
+      color: #c9d1d9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 100vh;
+      padding: 2rem 1rem 4rem;
+    }
+
+    /* ── Header ── */
+    header {
+      max-width: 960px;
+      margin: 0 auto 2.5rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid #21262d;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .header-title { display: flex; align-items: center; gap: 12px; }
+    .header-icon {
+      width: 36px; height: 36px; border-radius: 8px;
+      background: linear-gradient(135deg, #1f6feb, #388bfd);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    header h1 { font-size: 1.25rem; font-weight: 600; color: #e6edf3; }
+    header p  { font-size: 0.78rem; color: #8b949e; margin-top: 3px; }
+    .header-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 12px; border-radius: 20px;
+      font-size: 0.78rem; font-weight: 500; border: 1px solid;
+    }
+    .badge.ready     { color: #3fb950; border-color: #3fb95040; background: #3fb95015; }
+    .badge.partial   { color: #e3b341; border-color: #e3b34140; background: #e3b34115; }
+    .badge.not-ready { color: #8b949e; border-color: #30363d;   background: #161b22; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+    /* ── Layout ── */
+    main { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 1rem; }
+
+    .card {
+      background: #161b22; border: 1px solid #30363d;
+      border-radius: 10px; padding: 1.5rem;
+      transition: border-color 0.2s;
+    }
+    .card.completed { border-color: #3fb95030; }
+
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 1.1rem;
+    }
+    .card h2 {
+      font-size: 0.92rem; font-weight: 600; color: #e6edf3;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .card-done-badge {
+      font-size: 0.72rem; color: #3fb950;
+      background: #3fb95015; border: 1px solid #3fb95030;
+      border-radius: 20px; padding: 2px 8px;
+      display: none;
+    }
+
+    .step-num {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px; border-radius: 50%;
+      background: #21262d; border: 1px solid #30363d;
+      font-size: 0.72rem; color: #8b949e; flex-shrink: 0;
+      transition: all 0.2s;
+    }
+    .step-num.active { background: #1f6feb; border-color: #388bfd; color: #fff; }
+    .step-num.done   { background: #238636; border-color: #2ea043; color: #fff; }
+
+    .row { display: flex; gap: 0.75rem; align-items: center; }
+
+    input[type="text"] {
+      flex: 1; background: #0d1117; border: 1px solid #30363d;
+      border-radius: 6px; color: #c9d1d9; padding: 8px 12px;
+      font-size: 0.88rem; outline: none; transition: border-color 0.15s;
+    }
+    input[type="text"]:focus { border-color: #58a6ff; }
+
+    button {
+      padding: 8px 18px; border-radius: 6px;
+      border: 1px solid #30363d; background: #21262d;
+      color: #c9d1d9; font-size: 0.88rem; cursor: pointer;
+      white-space: nowrap; transition: background 0.15s, border-color 0.15s;
+    }
+    button:hover:not(:disabled) { background: #30363d; border-color: #8b949e; }
+    button:disabled { opacity: 0.35; cursor: default; }
+    button.primary { background: #238636; border-color: #2ea043; color: #fff; }
+    button.primary:hover:not(:disabled) { background: #2ea043; }
+
+    .hint { font-size: 0.76rem; color: #8b949e; margin-top: 0.5rem; line-height: 1.5; }
+
+    .msg { margin-top: 0.75rem; padding: 8px 12px; border-radius: 6px; font-size: 0.82rem; display: none; }
+    .msg.ok   { background: #3fb95015; border: 1px solid #3fb95040; color: #3fb950; display: block; }
+    .msg.err  { background: #f8514915; border: 1px solid #f8514940; color: #f85149; display: block; }
+    .msg.info { background: #58a6ff15; border: 1px solid #58a6ff40; color: #58a6ff; display: block; }
+
+    /* ── Progress ── */
+    .progress-wrap { margin-top: 1rem; display: none; }
+    .progress-label { font-size: 0.8rem; color: #8b949e; margin-bottom: 6px; display: flex; justify-content: space-between; }
+    .progress-bar-bg { background: #21262d; border-radius: 4px; height: 6px; overflow: hidden; }
+    .progress-bar-fill { height: 100%; background: #1f6feb; border-radius: 4px; transition: width 0.2s; width: 0%; }
+
+    /* ── Score chart ── */
+    .chart-wrap { margin-top: 1rem; display: none; }
+    .chart-label { font-size: 0.78rem; color: #8b949e; margin-bottom: 6px; }
+    canvas { width: 100%; height: 110px; display: block; border-radius: 6px; background: #0d1117; }
+
+    /* ── Drop zone ── */
+    #drop-zone {
+      border: 2px dashed #30363d; border-radius: 8px;
+      padding: 2rem 1rem; text-align: center; cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      color: #8b949e; font-size: 0.88rem;
+    }
+    #drop-zone:hover, #drop-zone.dragover { border-color: #58a6ff; background: #58a6ff08; }
+    #drop-zone svg { margin-bottom: 0.75rem; opacity: 0.5; }
+
+    /* ── Detect result ── */
+    .result-section { margin-top: 1.25rem; display: none; }
+    .result-divider { border: none; border-top: 1px solid #21262d; margin-bottom: 1.25rem; }
+
+    .image-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .image-box { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; overflow: hidden; }
+    .image-box-label {
+      font-size: 0.72rem; color: #8b949e; padding: 6px 10px;
+      border-bottom: 1px solid #21262d; letter-spacing: 0.04em; text-transform: uppercase;
+    }
+    .image-box img { width: 100%; height: 220px; object-fit: contain; display: block; }
+
+    .verdict {
+      margin-top: 1rem; padding: 1rem 1.25rem; border-radius: 8px;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 0.5rem;
+    }
+    .verdict.defect { background: #f8514915; border: 1px solid #f8514940; }
+    .verdict.normal { background: #3fb95015; border: 1px solid #3fb95040; }
+    .verdict-left { display: flex; align-items: center; gap: 10px; }
+    .verdict-icon { font-size: 1.2rem; }
+    .verdict-label { font-size: 1rem; font-weight: 700; }
+    .verdict.defect .verdict-label { color: #f85149; }
+    .verdict.normal .verdict-label { color: #3fb950; }
+    .verdict-meta { font-size: 0.82rem; color: #8b949e; }
+    .verdict-meta span { color: #c9d1d9; font-weight: 500; }
+
+    /* ── Benchmark results ── */
+    .bench-results { display: none; margin-top: 1rem; }
+
+    .auroc-display {
+      display: flex; align-items: baseline; gap: 0.5rem;
+      padding: 1rem 1.25rem; border-radius: 8px;
+      background: #1f6feb15; border: 1px solid #1f6feb40;
+      margin-bottom: 1rem;
+    }
+    .auroc-number { font-size: 2.2rem; font-weight: 700; color: #58a6ff; font-variant-numeric: tabular-nums; }
+    .auroc-label  { font-size: 0.88rem; color: #8b949e; }
+    .auroc-meta   { margin-left: auto; font-size: 0.82rem; color: #8b949e; }
+    .auroc-meta span { color: #c9d1d9; }
+
+    .bench-table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+    .bench-table th {
+      text-align: left; padding: 6px 8px; color: #8b949e;
+      border-bottom: 1px solid #30363d; font-weight: 500;
+    }
+    .bench-table th:not(:first-child) { text-align: right; }
+    .bench-table td { padding: 7px 8px; border-bottom: 1px solid #21262d; }
+    .bench-table td:not(:first-child) { text-align: right; }
+    .bench-table tr.summary td { border-top: 1px solid #30363d; border-bottom: none; font-weight: 600; padding-top: 10px; }
+
+    /* ── ROC curve ── */
+    .roc-wrap { margin-top: 1rem; }
+    .roc-label { font-size: 0.78rem; color: #8b949e; margin-bottom: 6px; }
+    #roc-canvas { width: 100%; border-radius: 6px; background: #0d1117; display: block; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-title">
+    <div class="header-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+    </div>
+    <div>
+      <h1>AOI Defect Detection</h1>
+      <p>PatchCore (CVPR 2022) · WideResNet50-2 · MVTec AD — transistor</p>
+    </div>
+  </div>
+  <div class="header-meta">
+    <div id="status-badge" class="badge not-ready">
+      <span class="dot"></span>
+      <span id="status-text">Connecting…</span>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- Step 1: Build -->
+  <div class="card" id="card1">
+    <div class="card-header">
+      <h2><span class="step-num" id="sn1">1</span> Build Memory Bank</h2>
+      <span class="card-done-badge" id="done1">✓ Done</span>
+    </div>
+    <div class="row">
+      <input type="text" id="build-dir" value="data/transistor/train/good" placeholder="Path to normal training images" />
+      <button class="primary" id="build-btn" onclick="startBuild()">Build</button>
+    </div>
+    <p class="hint">Extracts ResNet18 patch features from normal images and indexes them into a kNN memory bank. No defect labels required.</p>
+    <div class="progress-wrap" id="build-progress">
+      <div class="progress-label">
+        <span id="build-progress-label">Processing…</span>
+        <span id="build-progress-count">0 / 0</span>
+      </div>
+      <div class="progress-bar-bg"><div class="progress-bar-fill" id="build-bar"></div></div>
+    </div>
+    <div id="build-msg" class="msg"></div>
+  </div>
+
+  <!-- Step 2: Calibrate -->
+  <div class="card" id="card2">
+    <div class="card-header">
+      <h2><span class="step-num" id="sn2">2</span> Calibrate Threshold</h2>
+      <span class="card-done-badge" id="done2">✓ Done</span>
+    </div>
+    <div class="row">
+      <input type="text" id="cal-dir" value="data/transistor/test/good" placeholder="Path to held-out normal images" />
+      <button class="primary" id="cal-btn" onclick="startCalibrate()" disabled>Calibrate</button>
+    </div>
+    <p class="hint">Scores held-out normal images and sets the anomaly threshold at the 99th percentile. Uses images the model has never seen.</p>
+    <div class="progress-wrap" id="cal-progress">
+      <div class="progress-label">
+        <span id="cal-progress-label">Scoring…</span>
+        <span id="cal-progress-count">0 / 0</span>
+      </div>
+      <div class="progress-bar-bg"><div class="progress-bar-fill" id="cal-bar"></div></div>
+    </div>
+    <div class="chart-wrap" id="chart-wrap">
+      <div class="chart-label">Anomaly score distribution of normal images — red line = threshold</div>
+      <canvas id="score-chart"></canvas>
+    </div>
+    <div id="cal-msg" class="msg"></div>
+  </div>
+
+  <!-- Step 3: Detect -->
+  <div class="card" id="card3">
+    <div class="card-header">
+      <h2><span class="step-num" id="sn3">3</span> Detect Defects</h2>
+      <span class="card-done-badge" id="done3">✓ Done</span>
+    </div>
+    <div style="position:relative;">
+      <div id="drop-zone"
+           ondragover="onDragOver(event)" ondrop="onDrop(event)" ondragleave="onDragLeave(event)">
+        <div id="drop-zone-inner">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <p>Click or drag image here</p>
+          <p style="font-size:0.74rem;margin-top:4px;color:#6e7681">PNG · JPG supported</p>
+        </div>
+      </div>
+      <input type="file" id="file-input" accept="image/*" onchange="onFileChange(event)"
+             style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;" />
+    </div>
+    <div id="detect-msg" class="msg"></div>
+    <div style="margin-top:1rem;text-align:right">
+      <button class="primary" id="detect-btn" onclick="detectDefects()" disabled>Run Inference</button>
+    </div>
+
+    <!-- Inline results -->
+    <div class="result-section" id="result-section">
+      <hr class="result-divider" />
+      <div class="image-grid">
+        <div class="image-box">
+          <div class="image-box-label">Original</div>
+          <img id="result-original" alt="original" />
+        </div>
+        <div class="image-box">
+          <div class="image-box-label">Anomaly Heatmap</div>
+          <img id="result-heatmap" alt="heatmap" />
+        </div>
+      </div>
+      <div id="verdict" class="verdict"></div>
+    </div>
+  </div>
+
+  <!-- Step 4: Benchmark -->
+  <div class="card" id="card4">
+    <div class="card-header">
+      <h2><span class="step-num" id="sn4">4</span> Benchmark</h2>
+      <span class="card-done-badge" id="done4">✓ Done</span>
+    </div>
+    <div class="row">
+      <input type="text" id="bench-dir" value="data/transistor" placeholder="MVTec category root (contains test/)" />
+      <button class="primary" id="bench-btn" onclick="startBenchmark()" disabled>Run Benchmark</button>
+    </div>
+    <p class="hint">Scores all test images across normal and defect categories to compute AUROC — the standard anomaly detection metric.</p>
+    <div class="progress-wrap" id="bench-progress">
+      <div class="progress-label">
+        <span id="bench-progress-label">Scoring…</span>
+        <span id="bench-progress-count">0 / 0</span>
+      </div>
+      <div class="progress-bar-bg"><div class="progress-bar-fill" id="bench-bar"></div></div>
+    </div>
+    <div class="bench-results" id="bench-results">
+      <div class="auroc-display">
+        <span class="auroc-number" id="auroc-value">—</span>
+        <span class="auroc-label">AUROC</span>
+        <span class="auroc-meta">threshold <span id="bench-threshold">—</span></span>
+      </div>
+      <div class="roc-wrap">
+        <div class="roc-label">ROC Curve — AUC = <span id="roc-auc-label">—</span></div>
+        <canvas id="roc-canvas"></canvas>
+      </div>
+      <table class="bench-table" style="margin-top:1rem;">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Images</th>
+            <th>Result</th>
+            <th>Rate</th>
+          </tr>
+        </thead>
+        <tbody id="bench-tbody"></tbody>
+      </table>
+    </div>
+    <div id="bench-msg" class="msg"></div>
+  </div>
+
+</main>
+
+<script>
+  let selectedFile = null;
+  let scores = [];
+  let threshold = null;
+
+  // ── health ───────────────────────────────────────────────────────
+  async function checkHealth() {
+    try {
+      const res = await fetch('/health');
+      const d = await res.json();
+      const badge = document.getElementById('status-badge');
+      const text  = document.getElementById('status-text');
+
+      if (d.memory_bank_ready && d.threshold !== null) {
+        badge.className = 'badge ready';
+        text.textContent = `Ready · threshold ${d.threshold?.toFixed(4)}`;
+        threshold = d.threshold;
+        markDone(1); markDone(2);
+        document.getElementById('cal-btn').disabled = false;
+        document.getElementById('detect-btn').disabled = !selectedFile;
+        document.getElementById('bench-btn').disabled = false;
+      } else if (d.memory_bank_ready) {
+        badge.className = 'badge partial';
+        text.textContent = 'Memory bank ready — calibration needed';
+        markDone(1);
+        document.getElementById('cal-btn').disabled = false;
+      } else {
+        badge.className = 'badge not-ready';
+        text.textContent = 'Not ready';
+      }
+    } catch {
+      document.getElementById('status-badge').className = 'badge not-ready';
+      document.getElementById('status-text').textContent = 'API unreachable';
+    }
+  }
+
+  function markDone(step) {
+    const sn = document.getElementById('sn' + step);
+    const badge = document.getElementById('done' + step);
+    const card = document.getElementById('card' + step);
+    if (sn) sn.className = 'step-num done';
+    if (badge) badge.style.display = 'inline-block';
+    if (card) card.classList.add('completed');
+  }
+
+  // ── build ────────────────────────────────────────────────────────
+  function startBuild() {
+    const dir = document.getElementById('build-dir').value.trim();
+    const msg = document.getElementById('build-msg');
+    const progressWrap = document.getElementById('build-progress');
+    const bar = document.getElementById('build-bar');
+    const label = document.getElementById('build-progress-label');
+    const count = document.getElementById('build-progress-count');
+
+    document.getElementById('build-btn').disabled = true;
+    progressWrap.style.display = 'block';
+    showMsg(msg, 'info', 'Building memory bank…');
+
+    const es = new EventSource(`/build-stream?image_dir=${encodeURIComponent(dir)}`);
+
+    es.onmessage = (e) => {
+      const d = JSON.parse(e.data);
+      if (d.type === 'progress') {
+        const pct = Math.round(d.done / d.total * 100);
+        bar.style.width = pct + '%';
+        label.textContent = `Extracting patch features… ${pct}%`;
+        count.textContent = `${d.done} / ${d.total}`;
+      }
+      if (d.type === 'done') {
+        es.close();
+        bar.style.width = '100%';
+        label.textContent = 'Complete';
+        count.textContent = `${d.images_processed} images`;
+        showMsg(msg, 'ok', `Memory bank built from ${d.images_processed} images.`);
+        document.getElementById('build-btn').disabled = false;
+        document.getElementById('cal-btn').disabled = false;
+        markDone(1);
+        checkHealth();
+      }
+      if (d.type === 'error') {
+        es.close();
+        showMsg(msg, 'err', d.message);
+        document.getElementById('build-btn').disabled = false;
+      }
+    };
+    es.onerror = () => { es.close(); showMsg(msg, 'err', 'Connection lost.'); document.getElementById('build-btn').disabled = false; };
+  }
+
+  // ── calibrate ────────────────────────────────────────────────────
+  function startCalibrate() {
+    const dir = document.getElementById('cal-dir').value.trim();
+    const msg = document.getElementById('cal-msg');
+    const progressWrap = document.getElementById('cal-progress');
+    const bar = document.getElementById('cal-bar');
+    const label = document.getElementById('cal-progress-label');
+    const count = document.getElementById('cal-progress-count');
+    const chartWrap = document.getElementById('chart-wrap');
+
+    document.getElementById('cal-btn').disabled = true;
+    progressWrap.style.display = 'block';
+    chartWrap.style.display = 'block';
+    showMsg(msg, 'info', 'Calibrating…');
+    scores = [];
+
+    const es = new EventSource(`/calibrate-stream?image_dir=${encodeURIComponent(dir)}`);
+
+    es.onmessage = (e) => {
+      const d = JSON.parse(e.data);
+      if (d.type === 'progress') {
+        const pct = Math.round(d.done / d.total * 100);
+        bar.style.width = pct + '%';
+        label.textContent = `Scoring normal images… ${pct}%`;
+        count.textContent = `${d.done} / ${d.total}`;
+        scores.push(d.score);
+        drawChart(scores, null);
+      }
+      if (d.type === 'done') {
+        es.close();
+        bar.style.width = '100%';
+        threshold = d.threshold;
+        drawChart(scores, threshold);
+        showMsg(msg, 'ok', `Threshold set to ${threshold} (99th percentile, ${scores.length} images).`);
+        document.getElementById('cal-btn').disabled = false;
+        document.getElementById('bench-btn').disabled = false;
+        if (selectedFile) document.getElementById('detect-btn').disabled = false;
+        markDone(2);
+        checkHealth();
+      }
+      if (d.type === 'error') {
+        es.close();
+        showMsg(msg, 'err', d.message);
+        document.getElementById('cal-btn').disabled = false;
+      }
+    };
+    es.onerror = () => { es.close(); showMsg(msg, 'err', 'Connection lost.'); document.getElementById('cal-btn').disabled = false; };
+  }
+
+  // ── score chart ──────────────────────────────────────────────────
+  function drawChart(scores, thresholdLine) {
+    const canvas = document.getElementById('score-chart');
+    const W = canvas.offsetWidth || 800;
+    const H = 110;
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    if (scores.length === 0) return;
+
+    const pad = { top: 14, bottom: 20, left: 8, right: 8 };
+    const maxScore = Math.max(...scores, thresholdLine || 0) * 1.15;
+    const range = maxScore;
+    const barW = Math.max(2, (W - pad.left - pad.right) / scores.length - 1);
+
+    scores.forEach((s, i) => {
+      const x = pad.left + i * ((W - pad.left - pad.right) / scores.length);
+      const barH = (s / range) * (H - pad.top - pad.bottom);
+      ctx.fillStyle = '#1f6feb66';
+      ctx.fillRect(x, H - pad.bottom - barH, barW, barH);
+    });
+
+    if (thresholdLine !== null) {
+      const ty = H - pad.bottom - (thresholdLine / range) * (H - pad.top - pad.bottom);
+      ctx.strokeStyle = '#f85149'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.moveTo(pad.left, ty); ctx.lineTo(W - pad.right, ty); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#f85149'; ctx.font = '10px monospace';
+      ctx.fillText(`threshold ${thresholdLine}`, pad.left + 4, ty - 4);
+    }
+
+    ctx.fillStyle = '#6e7681'; ctx.font = '10px monospace';
+    ctx.fillText(maxScore.toFixed(2), pad.left, pad.top + 6);
+    ctx.fillText('0', pad.left, H - pad.bottom + 10);
+  }
+
+  // ── file handling ────────────────────────────────────────────────
+  function onFileChange(e) {
+    if (e.target.files[0]) { setFile(e.target.files[0]); e.target.value = ''; }
+  }
+  function onDragOver(e)  { e.preventDefault(); document.getElementById('drop-zone').classList.add('dragover'); }
+  function onDragLeave()  { document.getElementById('drop-zone').classList.remove('dragover'); }
+  function onDrop(e) {
+    e.preventDefault();
+    document.getElementById('drop-zone').classList.remove('dragover');
+    if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+  }
+
+  function setFile(file) {
+    selectedFile = file;
+    if (threshold !== null) document.getElementById('detect-btn').disabled = false;
+    document.getElementById('drop-zone-inner').innerHTML = `
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#3fb950" stroke-width="1.5">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+      <p style="color:#c9d1d9;font-weight:500;margin-top:4px">${file.name}</p>
+      <p style="font-size:0.74rem;margin-top:2px;color:#6e7681">${(file.size/1024).toFixed(1)} KB &nbsp;·&nbsp; click to replace</p>`;
+    const reader = new FileReader();
+    reader.onload = ev => { document.getElementById('result-original').src = ev.target.result; };
+    reader.readAsDataURL(file);
+  }
+
+  // ── detect ───────────────────────────────────────────────────────
+  async function detectDefects() {
+    if (!selectedFile) return;
+    const msg = document.getElementById('detect-msg');
+    showMsg(msg, 'info', 'Running inference…');
+    document.getElementById('detect-btn').disabled = true;
+
+    const form = new FormData();
+    form.append('file', selectedFile);
+
+    try {
+      const res = await fetch('/predict', { method: 'POST', body: form });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.detail || res.statusText);
+
+      document.getElementById('result-heatmap').src = 'data:image/jpeg;base64,' + d.heatmap_base64;
+
+      const verdict = document.getElementById('verdict');
+      verdict.className = 'verdict ' + (d.is_defect ? 'defect' : 'normal');
+      verdict.innerHTML = `
+        <div class="verdict-left">
+          <span class="verdict-icon">${d.is_defect ? '✕' : '✓'}</span>
+          <span class="verdict-label">${d.is_defect ? 'DEFECT DETECTED' : 'PASS'}</span>
+        </div>
+        <span class="verdict-meta">
+          Score <span>${d.score}</span> &nbsp;·&nbsp; Threshold <span>${d.threshold}</span>
+          &nbsp;·&nbsp; <span>${d.inference_ms} ms</span>
+        </span>`;
+
+      const section = document.getElementById('result-section');
+      section.style.display = 'block';
+      section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      markDone(3);
+      showMsg(msg, 'ok', 'Inference complete.');
+    } catch (err) {
+      showMsg(msg, 'err', `Inference failed: ${err.message}`);
+    }
+    document.getElementById('detect-btn').disabled = false;
+  }
+
+  // ── benchmark ────────────────────────────────────────────────────
+  function startBenchmark() {
+    const dir = document.getElementById('bench-dir').value.trim();
+    const msg = document.getElementById('bench-msg');
+    const progressWrap = document.getElementById('bench-progress');
+    const bar = document.getElementById('bench-bar');
+    const label = document.getElementById('bench-progress-label');
+    const count = document.getElementById('bench-progress-count');
+
+    document.getElementById('bench-btn').disabled = true;
+    document.getElementById('bench-results').style.display = 'none';
+    progressWrap.style.display = 'block';
+    showMsg(msg, 'info', 'Running benchmark across all test images…');
+
+    const es = new EventSource(`/benchmark-stream?data_dir=${encodeURIComponent(dir)}`);
+
+    es.onmessage = (e) => {
+      const d = JSON.parse(e.data);
+      if (d.type === 'progress') {
+        const pct = Math.round(d.done / d.total * 100);
+        bar.style.width = pct + '%';
+        label.textContent = `Scoring [${d.category}]… ${pct}%`;
+        count.textContent = `${d.done} / ${d.total}`;
+      }
+      if (d.type === 'done') {
+        es.close();
+        bar.style.width = '100%';
+        label.textContent = 'Complete';
+
+        document.getElementById('auroc-value').textContent = d.auroc.toFixed(4);
+        document.getElementById('bench-threshold').textContent = d.threshold;
+
+        const tbody = document.getElementById('bench-tbody');
+        tbody.innerHTML = '';
+
+        const normalRate = (d.normal_pass / d.normal_total * 100).toFixed(1);
+        tbody.innerHTML += `<tr>
+          <td style="color:#3fb950;">good (normal)</td>
+          <td>${d.normal_total}</td>
+          <td style="color:#3fb950;">${d.normal_pass} pass</td>
+          <td style="color:#3fb950;">${normalRate}%</td>
+        </tr>`;
+
+        d.categories.forEach(cat => {
+          const rate = (cat.detected / cat.total * 100).toFixed(1);
+          const color = cat.detected === cat.total ? '#3fb950' : cat.detected >= cat.total * 0.8 ? '#e3b341' : '#f85149';
+          tbody.innerHTML += `<tr>
+            <td style="color:#c9d1d9;">${cat.name}</td>
+            <td>${cat.total}</td>
+            <td style="color:${color};">${cat.detected} detected</td>
+            <td style="color:${color};">${rate}%</td>
+          </tr>`;
+        });
+
+        tbody.innerHTML += `<tr class="summary">
+          <td style="color:#e6edf3;">Total defects</td>
+          <td>${d.defect_total}</td>
+          <td style="color:#58a6ff;">${d.defect_detected} detected</td>
+          <td style="color:#58a6ff;">${(d.defect_detected/d.defect_total*100).toFixed(1)}%</td>
+        </tr>`;
+
+        document.getElementById('bench-results').style.display = 'block';
+        drawROC(d.scores, d.labels, d.auroc);
+        markDone(4);
+        showMsg(msg, 'ok', `AUROC: ${d.auroc.toFixed(4)}`);
+        document.getElementById('bench-btn').disabled = false;
+      }
+      if (d.type === 'error') {
+        es.close();
+        showMsg(msg, 'err', d.message);
+        document.getElementById('bench-btn').disabled = false;
+      }
+    };
+    es.onerror = () => { es.close(); showMsg(msg, 'err', 'Connection lost.'); document.getElementById('bench-btn').disabled = false; };
+  }
+
+  // ── ROC curve ────────────────────────────────────────────────────
+  function drawROC(scores, labels, auroc) {
+    const canvas = document.getElementById('roc-canvas');
+    const W = canvas.offsetWidth || 600;
+    const H = Math.round(W * 0.55);
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+
+    const pad = { top: 16, bottom: 40, left: 48, right: 20 };
+    const pw = W - pad.left - pad.right;
+    const ph = H - pad.top - pad.bottom;
+
+    // Compute ROC points
+    const n_pos = labels.filter(l => l === 1).length;
+    const n_neg = labels.filter(l => l === 0).length;
+    const sorted = scores.map((s, i) => ({ s, l: labels[i] })).sort((a, b) => b.s - a.s);
+    const pts = [{ fpr: 0, tpr: 0 }];
+    let tp = 0, fp = 0;
+    for (const { l } of sorted) {
+      if (l === 1) tp++; else fp++;
+      pts.push({ fpr: fp / n_neg, tpr: tp / n_pos });
+    }
+    pts.push({ fpr: 1, tpr: 1 });
+
+    const toX = fpr => pad.left + fpr * pw;
+    const toY = tpr => pad.top + (1 - tpr) * ph;
+
+    // Grid lines
+    ctx.strokeStyle = '#21262d'; ctx.lineWidth = 1;
+    [0.25, 0.5, 0.75].forEach(v => {
+      ctx.beginPath(); ctx.moveTo(toX(v), pad.top); ctx.lineTo(toX(v), pad.top + ph); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(pad.left, toY(v)); ctx.lineTo(pad.left + pw, toY(v)); ctx.stroke();
+    });
+
+    // Diagonal (random classifier)
+    ctx.strokeStyle = '#30363d'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(toX(0), toY(0)); ctx.lineTo(toX(1), toY(1)); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Fill under ROC curve
+    ctx.beginPath();
+    ctx.moveTo(toX(0), toY(0));
+    pts.forEach(p => ctx.lineTo(toX(p.fpr), toY(p.tpr)));
+    ctx.lineTo(toX(1), toY(0));
+    ctx.closePath();
+    ctx.fillStyle = '#1f6feb18';
+    ctx.fill();
+
+    // ROC curve line
+    ctx.beginPath();
+    ctx.strokeStyle = '#58a6ff'; ctx.lineWidth = 2;
+    pts.forEach((p, i) => i === 0 ? ctx.moveTo(toX(p.fpr), toY(p.tpr)) : ctx.lineTo(toX(p.fpr), toY(p.tpr)));
+    ctx.stroke();
+
+    // Axes
+    ctx.strokeStyle = '#8b949e'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top + ph); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pad.left, pad.top + ph); ctx.lineTo(pad.left + pw, pad.top + ph); ctx.stroke();
+
+    // Axis labels
+    ctx.fillStyle = '#6e7681'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+    [0, 0.25, 0.5, 0.75, 1].forEach(v => {
+      ctx.fillText(v.toFixed(2), toX(v), pad.top + ph + 14);
+    });
+    ctx.textAlign = 'right';
+    [0, 0.25, 0.5, 0.75, 1].forEach(v => {
+      ctx.fillText(v.toFixed(2), pad.left - 6, toY(v) + 4);
+    });
+    ctx.textAlign = 'center';
+    ctx.fillText('False Positive Rate', pad.left + pw / 2, H - 4);
+    ctx.save(); ctx.translate(12, pad.top + ph / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('True Positive Rate', 0, 0); ctx.restore();
+
+    // AUC label on chart
+    ctx.fillStyle = '#58a6ff'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'left';
+    ctx.fillText(`AUC = ${auroc.toFixed(4)}`, toX(0.5), toY(0.15));
+
+    document.getElementById('roc-auc-label').textContent = auroc.toFixed(4);
+  }
+
+  // ── util ─────────────────────────────────────────────────────────
+  function showMsg(el, type, text) { el.className = 'msg ' + type; el.textContent = text; }
+
+  checkHealth();
+</script>
+</body>
+</html>
